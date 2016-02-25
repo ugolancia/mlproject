@@ -1,0 +1,125 @@
+---
+title: "My first Machine Learning Project"
+author: "Ugo Lancia"
+date: "26 January 2016"
+output: html_document
+---
+
+In this project, as requested, my goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. Using the "classe" variable as outcome, I will build a predictive model to be tested in the test set, to predict the correctness of the exercise performed.
+
+
+```{r, cache = TRUE}
+setwd("/Users/ugolancia/Desktop/Data_Science_Specialization/Machine_Learning")
+if(!file.exists("project")) {
+  dir.create("project")
+}
+setwd("/Users/ugolancia/Desktop/Data_Science_Specialization/Machine_Learning/project")
+url_train<- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+train<- download.file(url_train, destfile = "train.csv", method= "curl")
+url_test<- "https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+test<- download.file(url_test, destfile = "test.csv", method = "curl")
+training<- read.csv("train.csv")
+testing<- read.csv("test.csv")
+```
+
+Let's do some exploration of the train datasets
+
+```{r}
+dim(training)
+names(training)
+head(training$classe)
+str(training)
+class(training$classe)
+summary(training$classe)
+```
+
+Now I want to explorate the meaning of the variables. I referred to the link in the assignment page
+
+http://groupware.les.inf.puc-rio.br/har 
+
+Regarding the outcome, the "classe" variable, Class A corresponds to the specified execution of the exercise, while the other 4 classes correspond to common mistakes. Participants were supervised by an experienced weight lifter to make sure the execution complied to the manner they were supposed to simulate. The exercises were performed by six male participants aged between 20-28 years, with little weight lifting experience.
+
+Globally speaking, then, we should fit a model for predicting class A exercise.
+
+```{r}
+wntg<- which(colSums(is.na(training))> 19000)
+training_complete<- training[, -c(wntg)]
+#another way is the following, the result is the same
+
+training_complete_1<- training[,!sapply(training,function(x) any(is.na(x)))]
+```
+
+```{r}
+library(caret)
+preObj<- preProcess(training_complete[, -93], method = c("center", "scale"))
+training_scaled<- predict(preObj, training_complete)
+```
+
+Get rid of the first two variables, consecutive numerics and names of the performers and then get rid of nzv
+
+```{r}
+training_scaled<- training_scaled[, -c(1:2)]
+nzv<- nzv(training_scaled)
+training_scaled_nzv<- training_scaled[, -nzv]
+
+```
+
+
+Now that I have the training_complete data.frame I am going to try two different approaches:
+1. training the model with a tree or a random forest model, with the Classe variable multicategorial
+2. coercing the B to E variable in a unique variable W that means wrong way to do the exercise and train a model with glm.
+
+for this first phase I'll leave out cross_validation and create two subtrain sets
+
+```{r}
+library(caret)
+intrain<- createDataPartition(training_scaled_nzv$classe, p = 0.2, list = FALSE)
+train_sub<- training_scaled_nzv[intrain, ]
+test_sub<- training_scaled_nzv[-intrain, ]
+library(doMC)
+registerDoMC(cores = 2)
+
+```
+
+
+
+```{r, cache = TRUE}
+library(caret)
+fitControl <- trainControl(method = "cv",
+                           number = 10,
+                           allowParallel = TRUE)
+modfit<- train(classe~., data = train_sub, method = "rpart", trControl=fitControl)
+```
+
+```{r, chache = TRUE}
+library(rattle)
+fancyRpartPlot(modfit$finalModel)
+pred<- predict(modfit, test_sub)
+conf<- table(pred, test_sub$classe)
+conf
+gen_acc<-sum(diag(conf))/sum(conf)
+gen_acc
+acc_A<- conf[1,1]/sum(conf[, 1])
+acc_A
+```
+
+overall and accuracy of 0.89 for A, that is what we are primarily interested in
+not bad!!
+
+```{r, cache = TRUE}
+library(doMC)
+registerDoMC(cores = 2)
+fitControl <- trainControl(method = "cv",
+                           number = 4,
+                           allowParallel = TRUE)
+modfit91<- train(classe~., data = train_sub, method = "rf", trControl=fitControl)
+pred<- predict(modfit91, test_sub)
+conf<- table(pred, test_sub$classe)
+conf
+gen_acc<-sum(diag(conf))/sum(conf)
+gen_acc
+acc_A<- conf[1,1]/sum(conf[, 1])
+acc_A
+```
+
+wow!!!!! that's it!!!!!!!
