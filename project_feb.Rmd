@@ -137,4 +137,7 @@ The operations performed were:
 * slicing the training set in two, one proper training set and another as a test set  
 *fitting two models: the first a decision tree, that resulted in a low accuracy and the second, a random forest model that was the final one that performed very well on the testing set.  
 
+###Reference to github repo
+
+[link](https://github.com/ugolancia/mlproject/tree/gh-pages)  
 
