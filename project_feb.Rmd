@@ -1,10 +1,11 @@
 ---
 title: "My first Machine Learning Project"
 author: "Ugo Lancia"
-date: "26 January 2016"
+date: "26 February 2016"
 output: html_document
 ---
 
+###Introduction: setting the stage
 In this project, as requested, my goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. Using the "classe" variable as outcome, I will build a predictive model to be tested in the test set, to predict the correctness of the exercise performed.
 
 
@@ -22,16 +23,17 @@ training<- read.csv("train.csv")
 testing<- read.csv("test.csv")
 ```
 
-Let's do some exploration of the train datasets
+Let's do some exploration of the train datasets, that I will not display for the sake of readabiliy
 
-```{r}
+```{r, eval= FALSE}
 dim(training)
 names(training)
-head(training$classe)
 str(training)
-class(training$classe)
 summary(training$classe)
 ```
+
+
+###Exploration and data preprocessing
 
 Now I want to explorate the meaning of the variables. I referred to the link in the assignment page
 
@@ -39,37 +41,32 @@ http://groupware.les.inf.puc-rio.br/har
 
 Regarding the outcome, the "classe" variable, Class A corresponds to the specified execution of the exercise, while the other 4 classes correspond to common mistakes. Participants were supervised by an experienced weight lifter to make sure the execution complied to the manner they were supposed to simulate. The exercises were performed by six male participants aged between 20-28 years, with little weight lifting experience.
 
-Globally speaking, then, we should fit a model for predicting class A exercise.
+Globally speaking, then, we should fit a model for predicting to which class the new observations belong.
 
-```{r}
+```{r, message = FALSE}
 wntg<- which(colSums(is.na(training))> 19000)
 training_complete<- training[, -c(wntg)]
-#another way is the following, the result is the same
 
-training_complete_1<- training[,!sapply(training,function(x) any(is.na(x)))]
-```
-
-```{r}
 library(caret)
 preObj<- preProcess(training_complete[, -93], method = c("center", "scale"))
 training_scaled<- predict(preObj, training_complete)
 ```
 
-Get rid of the first two variables, consecutive numerics and names of the performers and then get rid of nzv
+I then want to get rid of the first two variables, that are clearly not useful for the model (being consecutive number and names of the performes) 
+Next step is to get rid of near zero values
 
 ```{r}
 training_scaled<- training_scaled[, -c(1:2)]
 nzv<- nzv(training_scaled)
 training_scaled_nzv<- training_scaled[, -nzv]
-
 ```
 
+***
 
-Now that I have the training_complete data.frame I am going to try two different approaches:
-1. training the model with a tree or a random forest model, with the Classe variable multicategorial
-2. coercing the B to E variable in a unique variable W that means wrong way to do the exercise and train a model with glm.
+###Training the models
 
-for this first phase I'll leave out cross_validation and create two subtrain sets
+I'll create a train and a test set. Because of the computationally demand (and my relativelly old mac), I decided to fit the model to a 20 % of the entire datasate. 
+In addition I implemented a parallel processing.
 
 ```{r}
 library(caret)
@@ -78,9 +75,11 @@ train_sub<- training_scaled_nzv[intrain, ]
 test_sub<- training_scaled_nzv[-intrain, ]
 library(doMC)
 registerDoMC(cores = 2)
-
 ```
+***  
 
+####First model: decision tree
+In the trainControl function I implemented the **cross-validation** as "method", thinking that this would have been less computationally demanding than the bootstrapping
 
 
 ```{r, cache = TRUE}
@@ -103,12 +102,15 @@ acc_A<- conf[1,1]/sum(conf[, 1])
 acc_A
 ```
 
-overall and accuracy of 0.89 for A, that is what we are primarily interested in
-not bad!!
+The accuracy for A, that is what we are primarily interested in, is not terrible, but in general seems not to be a good model.  
+
+***
+
+
+####Second model: random forest
+Being more computationally demanding I set the **cross-validation** number to 4.
 
 ```{r, cache = TRUE}
-library(doMC)
-registerDoMC(cores = 2)
 fitControl <- trainControl(method = "cv",
                            number = 4,
                            allowParallel = TRUE)
@@ -122,4 +124,17 @@ acc_A<- conf[1,1]/sum(conf[, 1])
 acc_A
 ```
 
-wow!!!!! that's it!!!!!!!
+Very good accuracy. It seems we have it!!!  
+
+***
+
+###Conclusions
+After some basic preprocessing operations, the final model, implemented with a random forest, achieved an accuracy of nearly 100 %.  
+The operations performed were:  
+* getting rid of variables with a quasi total presence of missing values: this step shrinked the predictors from 159 to 92  
+* getting rid of near zero values variables, with the function nzv and then using the output as index for subsetting the database  
+* normalizing the numeric variables, with the preprocess function "center" and "scale"  
+* slicing the training set in two, one proper training set and another as a test set  
+*fitting two models: the first a decision tree, that resulted in a low accuracy and the second, a random forest model that was the final one that performed very well on the testing set.  
+
+
